@@ -957,6 +957,37 @@ body.tv-mode .season-header:hover { background: transparent; }
 body.tv-mode .modal-close:hover,
 body.tv-mode .detail-close:hover { transform: none; }
 
+/* ---------- T9 indicator ---------- */
+.t9-indicator {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius);
+    padding: 0.35rem 0.6rem;
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    box-shadow: var(--shadow);
+    pointer-events: none;
+    z-index: 1100;
+}
+.t9-indicator strong {
+    color: var(--accent);
+    font-weight: 700;
+    margin-right: 0.4rem;
+}
+.t9-indicator .t9-cycle {
+    color: var(--text);
+    letter-spacing: 0.1em;
+}
+.t9-indicator .t9-cycle .t9-active {
+    color: var(--accent);
+    font-weight: 700;
+    text-decoration: underline;
+}
+
 /* ---------- TV pointer hint ---------- */
 .tv-hint {
     position: fixed;
