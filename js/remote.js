@@ -43,13 +43,26 @@ const Remote = {
         // Auto-enable when arrow keys / TV keys are used
         document.addEventListener('keydown', (e) => this._onKey(e), true);
 
-        // Disable TV mode when mouse is used
-        document.addEventListener('mousemove', () => {
-            if (!this.detected) this.disable();
+        // Disable TV mode when a *real* (non-touch, non-zero-movement) mouse is used —
+        // but never on detected TVs, since some smart TVs synthesise mousemove events
+        // during pointer-overlay rendering even when the user only used the remote.
+        let lastMouse = { x: 0, y: 0, t: 0 };
+        document.addEventListener('mousemove', (e) => {
+            if (this.detected) return;
+            const dx = Math.abs(e.clientX - lastMouse.x);
+            const dy = Math.abs(e.clientY - lastMouse.y);
+            const dt = Date.now() - lastMouse.t;
+            lastMouse = { x: e.clientX, y: e.clientY, t: Date.now() };
+            // Real mice move more than a couple px and faster than synthetic events.
+            if (dx + dy > 4 && dt < 1500) this.disable();
         });
 
-        // Make sure search input doesn't trap focus weirdly
         this._registerVidaaKeys();
+    },
+
+    forceTV() {
+        this.detected = true;
+        this.enable();
     },
 
     _detectTV() {
@@ -278,24 +291,38 @@ const Remote = {
     },
 
     _scrollIntoView(el) {
-        // Horizontal scroll inside a row
+        // Horizontal scroll inside a row carousel — keep focused card centred-ish.
         const scrollParent = el.closest('.row-scroll');
         if (scrollParent) {
             const r = el.getBoundingClientRect();
             const pr = scrollParent.getBoundingClientRect();
-            if (r.left < pr.left + 20) {
-                scrollParent.scrollBy({ left: r.left - pr.left - 40, behavior: 'smooth' });
-            } else if (r.right > pr.right - 20) {
-                scrollParent.scrollBy({ left: r.right - pr.right + 40, behavior: 'smooth' });
+            const margin = 80;
+            if (r.left < pr.left + margin) {
+                scrollParent.scrollBy({ left: r.left - pr.left - margin, behavior: 'smooth' });
+            } else if (r.right > pr.right - margin) {
+                scrollParent.scrollBy({ left: r.right - pr.right + margin, behavior: 'smooth' });
             }
         }
-        // Vertical scroll
+
+        // Vertical scroll — keep focus comfortably in viewport
         const r = el.getBoundingClientRect();
-        const margin = 100;
-        if (r.top < margin) {
-            window.scrollBy({ top: r.top - margin, behavior: 'smooth' });
-        } else if (r.bottom > window.innerHeight - margin) {
-            window.scrollBy({ top: r.bottom - window.innerHeight + margin, behavior: 'smooth' });
+        const topMargin = 120;
+        const bottomMargin = 140;
+        if (r.top < topMargin) {
+            window.scrollBy({ top: r.top - topMargin, behavior: 'smooth' });
+        } else if (r.bottom > window.innerHeight - bottomMargin) {
+            window.scrollBy({ top: r.bottom - window.innerHeight + bottomMargin, behavior: 'smooth' });
+        }
+
+        // Vertical scroll inside the detail page (it's its own scroll container)
+        const detailPage = document.getElementById('detailPage');
+        if (detailPage && detailPage.contains(el) && !detailPage.classList.contains('hidden')) {
+            const dr = detailPage.getBoundingClientRect();
+            if (r.top < dr.top + topMargin) {
+                detailPage.scrollBy({ top: r.top - dr.top - topMargin, behavior: 'smooth' });
+            } else if (r.bottom > dr.bottom - bottomMargin) {
+                detailPage.scrollBy({ top: r.bottom - dr.bottom + bottomMargin, behavior: 'smooth' });
+            }
         }
     }
 };

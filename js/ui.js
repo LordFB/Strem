@@ -179,6 +179,8 @@ const UI = {
     // TV Detail Page
     renderTVDetailPage(tvData) {
         const detailContent = document.getElementById('detailContent');
+        this._currentShowName = tvData.name || '';
+        this._currentTvData = tvData;
 
         const poster = tvData.poster_path ? this.posterUrl(tvData.poster_path, 'w500') : '';
         const backdrop = tvData.backdrop_path ? this.backdropUrl(tvData.backdrop_path) : '';
@@ -283,7 +285,9 @@ const UI = {
                 playBtn.addEventListener('click', () => {
                     const firstSeason = realSeasons[0];
                     if (firstSeason) {
-                        Player.playEpisode(tvData.id, firstSeason.season_number, 1, tvData.name);
+                        Player.playEpisode(tvData.id, firstSeason.season_number, 1, `${tvData.name} S${firstSeason.season_number}E1`, {
+                            showName: tvData.name
+                        });
                     }
                 });
             }
@@ -302,6 +306,9 @@ const UI = {
             epEl.className = 'episode-item';
             epEl.tabIndex = 0;
             epEl.dataset.focusable = 'episode';
+            epEl.dataset.show = tvId;
+            epEl.dataset.season = seasonNumber;
+            epEl.dataset.episode = ep.episode_number;
             const isWatched = Storage.isWatched(`${tvId}_s${seasonNumber}e${ep.episode_number}`);
             if (isWatched) epEl.classList.add('is-watched');
 
@@ -323,7 +330,10 @@ const UI = {
             `;
 
             epEl.addEventListener('click', () => {
-                Player.playEpisode(tvId, seasonNumber, ep.episode_number, ep.name);
+                Player.playEpisode(tvId, seasonNumber, ep.episode_number, ep.name, {
+                    runtimeMin: ep.runtime,
+                    showName: this._currentShowName || ''
+                });
             });
 
             container.appendChild(epEl);
