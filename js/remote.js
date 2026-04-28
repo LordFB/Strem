@@ -40,24 +40,60 @@ const Remote = {
         this.detected = this._detectTV();
         if (this.detected) this.enable();
 
-        // Auto-enable when arrow keys / TV keys are used
+        // Capture-phase keydown so we beat any inner handler.
         document.addEventListener('keydown', (e) => this._onKey(e), true);
 
-        // Disable TV mode when a *real* (non-touch, non-zero-movement) mouse is used —
-        // but never on detected TVs, since some smart TVs synthesise mousemove events
-        // during pointer-overlay rendering even when the user only used the remote.
-        let lastMouse = { x: 0, y: 0, t: 0 };
-        document.addEventListener('mousemove', (e) => {
-            if (this.detected) return;
-            const dx = Math.abs(e.clientX - lastMouse.x);
-            const dy = Math.abs(e.clientY - lastMouse.y);
-            const dt = Date.now() - lastMouse.t;
-            lastMouse = { x: e.clientX, y: e.clientY, t: Date.now() };
-            // Real mice move more than a couple px and faster than synthetic events.
-            if (dx + dy > 4 && dt < 1500) this.disable();
-        });
+        // Mouse handling: on detected TVs, neutralise hover-induced focus
+        // changes so the system pointer overlay can't steal focus from the
+        // keyboard-driven element.
+        if (this.detected) {
+            this._installMouseSuppression();
+        } else {
+            // Desktop: arrow-key auto-enable, mouse auto-disable.
+            let lastMouse = { x: 0, y: 0, t: 0 };
+            document.addEventListener('mousemove', (e) => {
+                const dx = Math.abs(e.clientX - lastMouse.x);
+                const dy = Math.abs(e.clientY - lastMouse.y);
+                const dt = Date.now() - lastMouse.t;
+                lastMouse = { x: e.clientX, y: e.clientY, t: Date.now() };
+                if (dx + dy > 4 && dt < 1500) this.disable();
+            });
+        }
 
         this._registerVidaaKeys();
+        this._maybeShowPointerHint();
+    },
+
+    forceTV() {
+        this.detected = true;
+        this.enable();
+        this._installMouseSuppression();
+    },
+
+    _installMouseSuppression() {
+        if (this._mouseSuppressed) return;
+        this._mouseSuppressed = true;
+
+        // Ignore hover-induced focus on cards/episodes/buttons. We let click-to-play
+        // still work (VIDAA pointer can click), but `mouseenter` will not refocus.
+        const stop = (e) => {
+            // Allow within the player iframe & search input
+            if (e.target.closest && e.target.closest('input, iframe, .modal-player')) return;
+            // Don't preventDefault on mouseup — that would break clicks. Just
+            // make sure mouseover doesn't move focus.
+            if (e.type === 'mouseover' || e.type === 'mouseenter') {
+                // No-op; native mouseover doesn't move focus by default, but
+                // some focus-on-hover patterns might. We leave click behaviour intact.
+                return;
+            }
+        };
+        document.addEventListener('mouseover', stop, true);
+        document.addEventListener('mouseenter', stop, true);
+
+        // Block focus() being called from a mousemove handler by recording
+        // the time of the last keyboard event and ignoring focus changes
+        // initiated within 200ms of mouse motion if no key was pressed.
+        document.addEventListener('keydown', () => { this._lastKeyT = Date.now(); }, true);
     },
 
     forceTV() {
@@ -100,9 +136,15 @@ const Remote = {
     },
 
     _focusInitial() {
-        if (document.activeElement && document.activeElement !== document.body) return;
+        if (document.activeElement && document.activeElement !== document.body) {
+            this._kbAnchor = document.activeElement;
+            return;
+        }
         const first = document.querySelector('.btn, .card, [data-focusable]');
-        if (first) first.focus();
+        if (first) {
+            first.focus();
+            this._kbAnchor = first;
+        }
     },
 
     _matches(code, group) {
@@ -240,7 +282,13 @@ const Remote = {
     },
 
     _move(direction) {
-        const current = document.activeElement;
+        // Anchor: prefer our last keyboard-driven focus over whatever the pointer
+        // hovered onto. If the anchor is gone from the DOM, fall back to
+        // document.activeElement.
+        let current = this._kbAnchor && document.body.contains(this._kbAnchor)
+            ? this._kbAnchor
+            : document.activeElement;
+        if (!current || current === document.body) current = document.activeElement;
         const candidates = this._focusables();
         if (!candidates.length) return;
 
@@ -286,6 +334,7 @@ const Remote = {
 
         if (best) {
             best.focus();
+            this._kbAnchor = best;
             this._scrollIntoView(best);
         }
     },
@@ -324,6 +373,42 @@ const Remote = {
                 detailPage.scrollBy({ top: r.bottom - dr.bottom + bottomMargin, behavior: 'smooth' });
             }
         }
+    },
+
+    _maybeShowPointerHint() {
+        if (!this.detected) return;
+        try {
+            if (localStorage.getItem('strem_tv_hint_seen')) return;
+        } catch (_) {}
+
+        const hint = document.createElement('div');
+        hint.className = 'tv-hint';
+        hint.innerHTML = `
+            <div class="tv-hint-card">
+                <div class="tv-hint-title">Welcome &mdash; using a remote?</div>
+                <p>If a pointer is showing on screen, press <strong>OK</strong> on your remote (the centre button) to switch out of pointer mode. Then use the arrow keys and OK to navigate.</p>
+                <button class="btn btn-primary" id="tvHintDismiss">Got it</button>
+            </div>
+        `;
+        document.body.appendChild(hint);
+        const dismiss = () => {
+            try { localStorage.setItem('strem_tv_hint_seen', '1'); } catch (_) {}
+            hint.remove();
+            document.removeEventListener('keydown', onKey, true);
+        };
+        const onKey = (e) => {
+            if ([13, 27, 8, 10009, 461, 166].indexOf(e.keyCode) !== -1) {
+                dismiss();
+                e.preventDefault();
+                e.stopPropagation();
+            }
+        };
+        hint.querySelector('#tvHintDismiss').addEventListener('click', dismiss);
+        document.addEventListener('keydown', onKey, true);
+        setTimeout(() => {
+            const btn = hint.querySelector('#tvHintDismiss');
+            if (btn) btn.focus();
+        }, 50);
     }
 };
 

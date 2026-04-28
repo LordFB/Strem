@@ -943,3 +943,51 @@ body.tv-mode .row-scroll {
 }
 body.tv-mode .row-nav { display: none; }
 body.tv-mode .menu-toggle { display: none !important; }
+
+/* In TV mode, hover effects are suppressed — the system pointer can sit on top of
+   any card without re-styling it. Only focus controls visual state. */
+body.tv-mode .card:hover { transform: none; }
+body.tv-mode .card:hover .card-poster { box-shadow: var(--shadow-card); }
+body.tv-mode .card:hover .card-poster img { transform: none; }
+body.tv-mode .btn:hover { transform: none; }
+body.tv-mode .row-nav:hover { transform: translateY(-50%); }
+body.tv-mode .episode-item:hover { background: transparent; }
+body.tv-mode .episode-item:hover .episode-play { background: rgba(255, 255, 255, 0.1); transform: none; }
+body.tv-mode .season-header:hover { background: transparent; }
+body.tv-mode .modal-close:hover,
+body.tv-mode .detail-close:hover { transform: none; }
+
+/* ---------- TV pointer hint ---------- */
+.tv-hint {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 4000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    animation: fadeIn 0.25s ease;
+}
+.tv-hint-card {
+    max-width: 480px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    text-align: center;
+    box-shadow: var(--shadow);
+}
+.tv-hint-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.85rem;
+}
+.tv-hint-card p {
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: 1.5rem;
+    line-height: 1.55;
+}
+.tv-hint-card strong { color: var(--text); }
