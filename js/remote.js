@@ -9,12 +9,15 @@
 const Remote = {
     // Hisense (VIDAA) + cross-platform smart TV key codes
     KEYS: {
-        LEFT:       [37],
-        UP:         [38],
-        RIGHT:      [39],
-        DOWN:       [40],
-        ENTER:      [13, 32],                 // OK / Space
-        BACK:       [8, 27, 10009, 461, 166], // Backspace, Esc, Tizen, webOS, Android-back
+        // Number-pad fallbacks (for when the VIDAA remote pointer can't be turned off):
+        //   2 = up, 4 = left, 5 = OK, 6 = right, 8 = down, 9 = back
+        // Both keyCodes (top-row 50/52/53/54/56/57) and numpad codes (98/100/101/102/104/105).
+        LEFT:       [37, 52, 100],
+        UP:         [38, 50, 98],
+        RIGHT:      [39, 54, 102],
+        DOWN:       [40, 56, 104],
+        ENTER:      [13, 32, 53, 101],          // OK / Space / "5" / numpad 5
+        BACK:       [8, 27, 10009, 461, 166, 57, 105], // Backspace, Esc, Tizen, webOS, Android-back, "9", numpad 9
         HOME:       [36, 10073],
         PLAY:       [415, 10252],
         PAUSE:      [19, 10073],
@@ -153,21 +156,34 @@ const Remote = {
 
     _onKey(e) {
         const code = e.keyCode || e.which;
-        const isArrow = [37, 38, 39, 40].indexOf(code) !== -1;
+        const inInput = document.activeElement && document.activeElement.tagName === 'INPUT';
 
-        // Auto-enable TV mode on arrow / remote key usage
-        if (!this.enabled && (isArrow || this._matches(code, 'BACK') ||
+        // True directional arrow keys (37-40) always work.
+        const isTrueArrow = [37, 38, 39, 40].indexOf(code) !== -1;
+        // Number-pad fallbacks only apply OUTSIDE inputs (so users can still type digits in search).
+        const isNumNav = !inInput && (
+            this._matches(code, 'UP')    && !isTrueArrow ||
+            this._matches(code, 'DOWN')  && !isTrueArrow ||
+            this._matches(code, 'LEFT')  && !isTrueArrow ||
+            this._matches(code, 'RIGHT') && !isTrueArrow
+        );
+        const isArrow = isTrueArrow || isNumNav;
+
+        // Number-pad ENTER (5) and BACK (9) likewise gated on not-typing.
+        const isNumEnter = !inInput && [53, 101].indexOf(code) !== -1;
+        const isNumBack  = !inInput && [57, 105].indexOf(code) !== -1;
+
+        // Auto-enable TV mode on any nav key
+        if (!this.enabled && (isArrow || isNumEnter || isNumBack ||
+                              this._matches(code, 'BACK') ||
                               this._matches(code, 'PLAY') || this._matches(code, 'PLAY_PAUSE') ||
                               this._matches(code, 'RED') || this._matches(code, 'GREEN') ||
                               this._matches(code, 'YELLOW') || this._matches(code, 'BLUE'))) {
             this.enable();
         }
 
-        // Don't hijack typing in the search box
-        const inInput = document.activeElement && document.activeElement.tagName === 'INPUT';
-
-        // BACK
-        if (this._matches(code, 'BACK')) {
+        // BACK (Esc/Backspace/remote-Back/9 outside inputs)
+        if ((this._matches(code, 'BACK') && (![57, 105].includes(code) || !inInput))) {
             if (this._handleBack()) {
                 e.preventDefault();
                 e.stopPropagation();
@@ -203,19 +219,28 @@ const Remote = {
             // Enter in search input: blur to commit and move into results
             document.activeElement.blur();
             const firstResult = document.querySelector('#searchGrid .card');
-            if (firstResult) firstResult.focus();
+            if (firstResult) {
+                firstResult.focus();
+                this._kbAnchor = firstResult;
+            }
             e.preventDefault();
             return;
         }
 
-        if (inInput) return; // let the user type
+        if (inInput) return; // let the user type — including digits 2/4/5/6/8/9
 
-        // Spatial nav
+        // Spatial nav (true arrows + numpad 2/4/6/8 fallback)
         if (isArrow) {
-            const dir = { 37: 'left', 38: 'up', 39: 'right', 40: 'down' }[code];
-            this._move(dir);
-            e.preventDefault();
-            return;
+            let dir;
+            if (this._matches(code, 'LEFT'))  dir = 'left';
+            else if (this._matches(code, 'UP'))    dir = 'up';
+            else if (this._matches(code, 'RIGHT')) dir = 'right';
+            else if (this._matches(code, 'DOWN'))  dir = 'down';
+            if (dir) {
+                this._move(dir);
+                e.preventDefault();
+                return;
+            }
         }
 
         // Enter / OK
@@ -378,21 +403,22 @@ const Remote = {
     _maybeShowPointerHint() {
         if (!this.detected) return;
         try {
-            if (localStorage.getItem('strem_tv_hint_seen')) return;
+            if (localStorage.getItem('strem_tv_hint_v2')) return;
         } catch (_) {}
 
         const hint = document.createElement('div');
         hint.className = 'tv-hint';
         hint.innerHTML = `
             <div class="tv-hint-card">
-                <div class="tv-hint-title">Welcome &mdash; using a remote?</div>
-                <p>If a pointer is showing on screen, press <strong>OK</strong> on your remote (the centre button) to switch out of pointer mode. Then use the arrow keys and OK to navigate.</p>
+                <div class="tv-hint-title">Remote tips</div>
+                <p>If a pointer is showing on screen, press <strong>OK</strong> on your remote (the centre button) to switch out of pointer mode &mdash; then arrow keys and OK navigate.</p>
+                <p>Or use the number pad as arrows: <strong>2</strong> up, <strong>8</strong> down, <strong>4</strong> left, <strong>6</strong> right, <strong>5</strong> select, <strong>9</strong> back.</p>
                 <button class="btn btn-primary" id="tvHintDismiss">Got it</button>
             </div>
         `;
         document.body.appendChild(hint);
         const dismiss = () => {
-            try { localStorage.setItem('strem_tv_hint_seen', '1'); } catch (_) {}
+            try { localStorage.setItem('strem_tv_hint_v2', '1'); } catch (_) {}
             hint.remove();
             document.removeEventListener('keydown', onKey, true);
         };
