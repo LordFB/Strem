@@ -34,8 +34,9 @@ const Player = {
             <iframe
                 src="${embedUrl}"
                 allowfullscreen
-                allow="autoplay; encrypted-media; fullscreen"
-                title="${title.replace(/"/g, '"')}"
+                allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+                referrerpolicy="origin"
+                title="${escapeHtml(title)}"
             ></iframe>
         `;
 
